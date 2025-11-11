@@ -1,35 +1,34 @@
 const express = require("express");
-const app = express();
+const bodyParser = require("body-parser");
 
-app.use(express.json());
+const app = express();
+app.use(bodyParser.json());
 
 app.post("/webhook", (req, res) => {
-  const date = req.body.sessionInfo?.parameters?.date;
+  const queryResult = req.body.queryResult;
+  const parameters = queryResult.parameters;
 
+  let date = parameters.date;
+
+  // Check if date is missing
   if (!date) {
     return res.json({
-      fulfillment_response: {
-        messages: [{ text: { text: ["Send a date plz 😭"] } }]
-      }
+      followupEventInput: {
+        name: "ASK_DATE",
+      },
     });
   }
 
-  const now = new Date();
-  const userDate = new Date(date);
-
-  if (userDate < now) {
-    return res.json({
-      fulfillment_response: {
-        messages: [{ text: { text: ["That date already passed 💀"] } }]
-      }
-    });
-  }
-
+  // Date exists: confirm booking
   return res.json({
-    fulfillment_response: {
-      messages: [{ text: { text: ["Date is valid ✅"] } }]
-      }
-    });
+    fulfillmentText: `Cool! Your booking is set for ${date}.`,
+  });
 });
 
-app.listen(3000, () => console.log("✅ Webhook live on 3000"));
+app.get("/", (req, res) => {
+  res.send("Webhook is running");
+});
+
+app.listen(3000, () => {
+  console.log("Server running on port 3000");
+});
