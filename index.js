@@ -1,34 +1,48 @@
-const express = require("express");
-const bodyParser = require("body-parser");
+// index.js
+const functions = require("firebase-functions");
+const { WebhookClient } = require("dialogflow-fulfillment");
+process.env.DEBUG = "dialogflow:debug";
 
-const app = express();
-app.use(bodyParser.json());
+exports.dialogflowFirebaseFulfillment = functions.https.onRequest((req, res) => {
+  const agent = new WebhookClient({ request: req, response: res });
 
-app.post("/webhook", (req, res) => {
-  const queryResult = req.body.queryResult;
-  const parameters = queryResult.parameters;
+  // Utility: check if date is valid & in the future
+  function isValidFutureDate(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
 
-  let date = parameters.date;
+    // basic sanity
+    if (isNaN(date.getTime())) return false;
 
-  // Check if date is missing
-  if (!date) {
-    return res.json({
-      followupEventInput: {
-        name: "ASK_DATE",
-      },
-    });
+    // Must be tomorrow or later (same-day bookings usually fail)
+    if (date <= now) return false;
+
+    return true;
   }
 
-  // Date exists: confirm booking
-  return res.json({
-    fulfillmentText: `Cool! Your booking is set for ${date}.`,
-  });
-});
+  // Handler for AskDate intent
+  async function askDateHandler(agent) {
+    const date = agent.parameters.date;
 
-app.get("/", (req, res) => {
-  res.send("Webhook is running");
-});
+    if (!isValidFutureDate(date)) {
+      agent.add("Hmm, that date doesn't look valid. Try giving me a future date like `15th November` or `next Monday`.");
+      return;
+    }
 
-app.listen(3000, () => {
-  console.log("Server running on port 3000");
+    // store in context for confirmation intent
+    agent.setContext({
+      name: "booking-details",
+      lifespan: 5,
+      parameters: {
+        date
+      }
+    });
+
+    agent.add(`Got it. You're going with **${date}**. Should I confirm this booking?`);
+  }
+
+  let intentMap = new Map();
+  intentMap.set("AskDate", askDateHandler);
+
+  agent.handleRequest(intentMap);
 });
